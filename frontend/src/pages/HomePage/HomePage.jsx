@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 
 const HomePage = () => {
@@ -12,14 +12,21 @@ const HomePage = () => {
 
   const BACKEND_URL = "http://localhost:5000/api/file";
 
-  // ==========================
-  // Upload File
-  // ==========================
-  const handleFileUpload = async () => {
-    if (!selectedFile) {
-      alert("Please select a file");
-      return;
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  const fetchHistory = async () => {
+    try {
+      const res = await axios.get(`${BACKEND_URL}/history`);
+      setTranscriptions(res.data);
+    } catch (error) {
+      console.error(error);
     }
+  };
+
+  const handleFileUpload = async () => {
+    if (!selectedFile) return alert("Select an audio file");
 
     try {
       setLoading(true);
@@ -27,186 +34,179 @@ const HomePage = () => {
       const formData = new FormData();
       formData.append("audio", selectedFile);
 
-      const res = await axios.post(
-        `${BACKEND_URL}/transcribe`,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
+      await axios.post(`${BACKEND_URL}/transcribe`, formData);
 
-      setTranscriptions((prev) => [
-        {
-          id: res.data.id,
-          transcription: res.data.transcription,
-        },
-        ...prev,
-      ]);
-
+      fetchHistory();
       setSelectedFile(null);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(error);
       alert("Upload failed");
     } finally {
       setLoading(false);
     }
   };
 
-  // ==========================
-  // Start Recording
-  // ==========================
   const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+    });
+
+    const recorder = new MediaRecorder(stream);
+
+    mediaRecorderRef.current = recorder;
+    audioChunksRef.current = [];
+
+    recorder.ondataavailable = (event) => {
+      audioChunksRef.current.push(event.data);
+    };
+
+    recorder.onstop = async () => {
+      const blob = new Blob(audioChunksRef.current, {
+        type: "audio/webm",
       });
 
-      const mediaRecorder = new MediaRecorder(stream);
+      const formData = new FormData();
 
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
+      formData.append(
+        "audio",
+        blob,
+        `recording-${Date.now()}.webm`
+      );
 
-      mediaRecorder.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
-      };
+      try {
+        setLoading(true);
 
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, {
-          type: "audio/webm",
-        });
-
-        const formData = new FormData();
-
-        formData.append(
-          "audio",
-          audioBlob,
-          `recording-${Date.now()}.webm`
+        await axios.post(
+          `${BACKEND_URL}/transcribe`,
+          formData
         );
 
-        try {
-          setLoading(true);
+        fetchHistory();
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-          const res = await axios.post(
-            `${BACKEND_URL}/transcribe`,
-            formData,
-            {
-              headers: {
-                "Content-Type": "multipart/form-data",
-              },
-            }
-          );
-
-          setTranscriptions((prev) => [
-            {
-              id: res.data.id,
-              transcription: res.data.transcription,
-            },
-            ...prev,
-          ]);
-        } catch (error) {
-          console.error(error);
-          alert("Transcription failed");
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      mediaRecorder.start();
-      setRecording(true);
-    } catch (error) {
-      console.error(error);
-      alert("Microphone permission denied");
-    }
+    recorder.start();
+    setRecording(true);
   };
 
-  // ==========================
-  // Stop Recording
-  // ==========================
   const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current.stop();
     setRecording(false);
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100 py-10 px-4">
 
-        <h1 className="text-4xl font-bold text-center mb-8">
-          Speech To Text
-        </h1>
+      <div className="max-w-5xl mx-auto">
 
-        {/* Upload Card */}
-        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">
-            Upload Audio File
-          </h2>
+        {/* Header */}
+        <div className="text-center mb-10">
+          <h1 className="text-5xl font-extrabold text-slate-800">
+            Speech To Text
+          </h1>
 
-          <input
-            type="file"
-            accept="audio/*"
-            onChange={(e) => setSelectedFile(e.target.files[0])}
-            className="mb-4 block w-full"
-          />
-
-          <button
-            onClick={handleFileUpload}
-            disabled={loading}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
-          >
-            Upload & Transcribe
-          </button>
+          <p className="text-slate-500 mt-3 text-lg">
+            Upload audio or record your voice and
+            instantly generate transcriptions.
+          </p>
         </div>
 
-        {/* Recorder Card */}
-        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">
-            Record Audio
-          </h2>
+        {/* Upload + Record Section */}
+        <div className="grid md:grid-cols-2 gap-6 mb-10">
 
-          {!recording ? (
+          {/* Upload Card */}
+          <div className="bg-white rounded-3xl shadow-lg p-6 transition hover:shadow-2xl">
+            <h2 className="text-xl font-semibold mb-5">
+              Upload Audio
+            </h2>
+
+            <input
+              type="file"
+              accept="audio/*"
+              onChange={(e) =>
+                setSelectedFile(e.target.files[0])
+              }
+              className="w-full border rounded-xl p-3 mb-4"
+            />
+
             <button
-              onClick={startRecording}
-              className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg"
+              onClick={handleFileUpload}
+              disabled={loading}
+              className="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition duration-300 hover:scale-[1.02]"
             >
-              Start Recording
+              Upload & Transcribe
             </button>
-          ) : (
-            <button
-              onClick={stopRecording}
-              className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg"
-            >
-              Stop Recording
-            </button>
-          )}
+          </div>
+
+          {/* Record Card */}
+          <div className="bg-white rounded-3xl shadow-lg p-6 transition hover:shadow-2xl">
+            <h2 className="text-xl font-semibold mb-5">
+              Voice Recorder
+            </h2>
+
+            {!recording ? (
+              <button
+                onClick={startRecording}
+                className="w-full py-3 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition duration-300 hover:scale-[1.02]"
+              >
+                🎤 Start Recording
+              </button>
+            ) : (
+              <button
+                onClick={stopRecording}
+                className="w-full py-3 rounded-xl bg-red-600 text-white font-semibold animate-pulse hover:bg-red-700 transition duration-300"
+              >
+                ⏹ Stop Recording
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Loading */}
         {loading && (
-          <div className="bg-yellow-100 border border-yellow-300 p-4 rounded-lg mb-6">
-            Processing audio...
+          <div className="bg-white rounded-2xl shadow-md p-4 mb-8 text-center">
+            <div className="animate-pulse text-blue-600 font-semibold">
+              Processing Audio...
+            </div>
           </div>
         )}
 
-        {/* Transcriptions */}
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-xl font-semibold mb-4">
-            Transcriptions
+        {/* History */}
+        <div>
+          <h2 className="text-3xl font-bold text-slate-800 mb-6">
+            Transcription History
           </h2>
 
           {transcriptions.length === 0 ? (
-            <p className="text-gray-500">
-              No transcriptions yet.
-            </p>
+            <div className="bg-white p-8 rounded-3xl shadow text-center text-slate-500">
+              No transcriptions available.
+            </div>
           ) : (
-            <div className="space-y-4">
+            <div className="grid gap-5">
               {transcriptions.map((item, index) => (
                 <div
                   key={item.id || index}
-                  className="border rounded-lg p-4 bg-slate-50"
+                  className="bg-white rounded-3xl shadow-lg p-6 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
                 >
-                  <p className="text-gray-800 whitespace-pre-wrap">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
+                      #{index + 1}
+                    </span>
+
+                    <span className="text-sm text-slate-400">
+                      {item.created_at
+                        ? new Date(
+                            item.created_at
+                          ).toLocaleString()
+                        : "Recent"}
+                    </span>
+                  </div>
+
+                  <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">
                     {item.transcription}
                   </p>
                 </div>
