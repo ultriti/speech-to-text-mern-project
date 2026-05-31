@@ -10,7 +10,7 @@ const HomePage = () => {
   const [transcriptions, setTranscriptions] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const BACKEND_URL = "http://localhost:5000/api/file";
+  const BACKEND_URL = import.meta.env.VITE_BASE_URL;
 
   useEffect(() => {
     fetchHistory();
@@ -18,7 +18,7 @@ const HomePage = () => {
 
   const fetchHistory = async () => {
     try {
-      const res = await axios.get(`${BACKEND_URL}/history`);
+      const res = await axios.get(`${BACKEND_URL}/api/file/history`);
       setTranscriptions(res.data);
     } catch (error) {
       console.error(error);
