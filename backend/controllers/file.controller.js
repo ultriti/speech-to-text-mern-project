@@ -1,7 +1,9 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const dotenv = require("dotenv");
 
+dotenv.config();
 const OpenAI = require('openai');
 
 const {
@@ -12,6 +14,9 @@ const {
 
 // ================= OPENAI =================
 
+console.log("OPENAI_API_KEY : ", process.env.PORT);
+console.log("PGPORT : ",process.env.PGPORT);
+console.log(process.env.OPENAI_API_KEY);
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -21,15 +26,12 @@ const openai = new OpenAI({
 // ================= MULTER =================
 
 const storage = multer.diskStorage({
-
   destination: (req, file, cb) => {
     cb(null, 'uploads/');
   },
-
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname));
   }
-
 });
 
 const upload = multer({ storage }).single('audio');
@@ -69,7 +71,6 @@ module.exports.upload_device = (req, res) => {
 module.exports.upload_db = async (req, res) => {
 
   upload(req, res, async (err) => {
-
     try {
 
       if (err) {
@@ -90,13 +91,9 @@ module.exports.upload_db = async (req, res) => {
       // ================= WHISPER =================
 
       const transcription = await openai.audio.transcriptions.create({
-
         file: fs.createReadStream(filePath),
-
         model: 'whisper-1',
-
         language: 'en'
-
       });
 
       // ================= SAVE DB =================

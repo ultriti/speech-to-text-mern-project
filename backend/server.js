@@ -18,7 +18,7 @@ app.get("/", (req, res) => {
 const PORT = process.env.PORT || 5000;
 
 // app.use("/api/user",user)
-app.use("/api/file",file)
+app.use("/api/file",file);
 
 app.listen(PORT, () => {
   console.log(`Server running on ${PORT}`);
